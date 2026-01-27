@@ -2,6 +2,8 @@ import argparse
 import json
 import logging
 import sys
+import warnings
+import os
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -174,6 +176,12 @@ def main():
         report_file = reporter.render_html(engine.findings, report_path)
         logger.info(f"HTML report generated: {report_file}")
     
+    except KeyboardInterrupt:
+        print()  # New line after ^C
+        logger.warning("[!] Scan interrupted by user")
+        # Suppress threading cleanup warnings
+        warnings.filterwarnings("ignore", category=ResourceWarning)
+        os._exit(0)  # Exit immediately without cleanup
     except Exception as e:
         logger.error(f"Scan failed: {e}")
         sys.exit(1)

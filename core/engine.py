@@ -1,4 +1,5 @@
-
+import signal
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from detectors.reflection import ReflectionDetector
 from detectors.idor import IDORDetector
@@ -25,6 +26,7 @@ class Engine:
         self.findings = []
         self.max_workers = max_workers
         self.concurrent = concurrent
+        self.interrupted = False
         
         # Default to all detectors if not specified
         if enabled_detectors is None:
@@ -57,19 +59,38 @@ class Engine:
         
         # Concurrent scanning for better performance
         if self.concurrent and len(endpoints) > 1:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            executor = ThreadPoolExecutor(max_workers=self.max_workers)
+            try:
                 futures = {executor.submit(self._scan_endpoint, ep): ep for ep in endpoints}
                 for future in as_completed(futures):
+                    if self.interrupted:
+                        break
                     try:
                         future.result()  # Findings are appended in _scan_endpoint
                     except Exception as e:
                         # Silent failure per endpoint to continue scanning
                         pass
+            except KeyboardInterrupt:
+                self.interrupted = True
+                # Cancel all remaining futures
+                for future in futures:
+                    future.cancel()
+                # Shutdown without waiting for threads to finish
+                executor.shutdown(wait=False, cancel_futures=True)
+                raise
+            finally:
+                if not self.interrupted:
+                    executor.shutdown(wait=True)
         else:
             # Sequential scanning (safer for rate-limited targets)
             for ep in endpoints:
+                if self.interrupted:
+                    break
                 try:
                     self._scan_endpoint(ep)
+                except KeyboardInterrupt:
+                    self.interrupted = True
+                    raise
                 except Exception:
                     pass
     
