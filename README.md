@@ -20,6 +20,17 @@
 
 ---
 
+🏛️ Philosophy
+
+Inspired by Diogenes of Sinope — questioning assumptions and exposing weak logic.
+
+DIOGENES does not shout.
+It does not guess.
+
+It observes.
+It compares.
+It reasons.
+
 ## 📦 Installation
 
 ```bash
