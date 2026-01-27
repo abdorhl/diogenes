@@ -18,7 +18,6 @@
 - **Rate Limiting** - Configurable delays to prevent bans
 - **Smart Crawling** - SPA support with JS endpoint extraction
 
----
 
 ## 🏛️ Philosophy
 
@@ -31,6 +30,7 @@ It **observes**.
 It **compares**.  
 It **reasons**.
 
+---
 
 ## 📦 Installation
 
