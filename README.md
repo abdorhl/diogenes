@@ -2,7 +2,7 @@
   <img src="screenshots/logo_diogenes.png" alt="DIOGENES" width="300">
 </p>
 
-<h1 align="center">DIOGENES v1.0</h1>
+<h1 align="center">DIOGENES v1.1</h1>
 <p align="center"><i>High-Performance Web Security Scanner for Developers</i></p>
 
 ---
