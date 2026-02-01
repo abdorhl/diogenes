@@ -2,17 +2,28 @@ import requests
 import time
 from typing import Optional, Dict
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 class Session:
     """Manages HTTP session, cookies, and headers for an identity."""
     
     def __init__(self, name: str, base_url: str, cookies: Optional[Dict] = None, 
-                 headers: Optional[Dict] = None, delay: float = 0.0):
+                 headers: Optional[Dict] = None, delay: float = 0.0, pool_size: int = 20):
         self.name = name
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
         self.delay = delay  # Delay between requests in seconds
         self.last_request_time = 0.0
+        
+        # Configure connection pooling for concurrent requests
+        adapter = HTTPAdapter(
+            pool_connections=pool_size,
+            pool_maxsize=pool_size,
+            max_retries=Retry(total=2, backoff_factor=0.1)
+        )
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
         
         if cookies:
             self.session.cookies.update(cookies)

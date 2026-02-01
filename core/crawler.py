@@ -3,19 +3,36 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from queue import Queue
+import threading
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
 
 class Crawler:
-    def __init__(self, session, max_depth=3, same_host_only=True):
+    # Compiled regex patterns for better performance
+    ENDPOINT_PATTERNS = [
+        re.compile(r"(?i)\bfetch\(\s*['\"]([^'\"]+)['\"]"),
+        re.compile(r"(?i)\baxios\.(?:get|post|put|delete|patch)\(\s*['\"]([^'\"]+)['\"]"),
+        re.compile(r"(?i)\bxmlhttprequest\b[\s\S]{0,200}open\(\s*['\"][A-Z]+['\"]\s*,\s*['\"]([^'\"]+)['\"]"),
+        re.compile(r"['\"](/(?:api|rest|graphql|v1|v2)/[^'\"\s<>]{1,200})['\"]"),
+    ]
+    
+    def __init__(self, session, max_depth=3, same_host_only=True, max_workers=10, max_urls=500):
         self.session = session
         self.visited = set()
+        self.visited_lock = threading.Lock()
         self.endpoints = []
+        self.endpoints_lock = threading.Lock()
         self.max_depth = max_depth
         self.same_host_only = same_host_only
         self.base_url = session.base_url
         self.base_host = urlparse(self.base_url).netloc
+        self.max_workers = max_workers
+        self.max_urls = max_urls
+        self.url_queue = Queue()
 
         # Keep endpoint list unique while preserving order
         self._endpoints_seen = set()
@@ -24,19 +41,61 @@ class Crawler:
         if not url:
             return
         norm = self._normalize_url(url)
-        if norm in self._endpoints_seen:
-            return
-        self._endpoints_seen.add(norm)
-        self.endpoints.append(norm)
+        with self.endpoints_lock:
+            if norm in self._endpoints_seen:
+                return
+            self._endpoints_seen.add(norm)
+            self.endpoints.append(norm)
 
-    def crawl(self, path="/", depth=0):
+    def crawl(self, start_path="/"):
+        """Main entry point - uses breadth-first crawling with concurrency"""
+        self.url_queue.put((start_path, 0))
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = set()
+            
+            while not self.url_queue.empty() or futures:
+                # Check if we've hit the URL limit
+                with self.visited_lock:
+                    if len(self.visited) >= self.max_urls:
+                        logger.debug(f"Reached max URLs limit ({self.max_urls})")
+                        break
+                
+                # Submit new tasks up to max_workers
+                while len(futures) < self.max_workers and not self.url_queue.empty():
+                    try:
+                        url, depth = self.url_queue.get_nowait()
+                        if depth <= self.max_depth:
+                            future = executor.submit(self._crawl_page, url, depth)
+                            futures.add(future)
+                    except:
+                        break
+                
+                # Process completed futures
+                if futures:
+                    done = set()
+                    try:
+                        for future in as_completed(futures, timeout=0.1):
+                            done.add(future)
+                            try:
+                                future.result()
+                            except Exception as e:
+                                logger.debug(f"Crawl error: {e}")
+                    except TimeoutError:
+                        pass  # Some futures still pending, that's ok
+                    futures = futures - done
+
+    def _crawl_page(self, path, depth):
+        """Crawl a single page (thread-safe)"""
         url = urljoin(self.base_url, path) if not path.startswith("http") else path
         norm_url = self._normalize_url(url)
         
-        if norm_url in self.visited or depth > self.max_depth:
-            return
-
-        self.visited.add(norm_url)
+        # Thread-safe check and add to visited
+        with self.visited_lock:
+            if norm_url in self.visited or len(self.visited) >= self.max_urls:
+                return
+            self.visited.add(norm_url)
+        
         logger.debug(f"Crawling (depth {depth}): {url}")
         
         try:
@@ -44,12 +103,21 @@ class Crawler:
             if not res or res.status_code >= 400:
                 logger.debug(f"Failed to fetch {url}: {res.status_code if res else 'None'}")
                 return
+            
+            # Check response size to avoid processing huge responses
+            try:
+                content_length = len(res.content or b"")
+                if content_length > 2 * 1024 * 1024:  # 2MB limit
+                    logger.debug(f"Skipping large response ({content_length} bytes): {url}")
+                    return
+            except:
+                pass
+                
         except Exception as e:
             logger.debug(f"Exception crawling {url}: {e}")
             return
 
         # Include the page we successfully crawled as a testable endpoint.
-        # This avoids 0-endpoint scans on SPAs that don't expose server URLs in <a>/<form>.
         self._add_endpoint(norm_url)
 
         # Seed additional endpoints from robots.txt / sitemap.xml only from the start page.
@@ -63,9 +131,12 @@ class Crawler:
 
     def _parse_links(self, html, parent_url, depth):
         try:
-            soup = BeautifulSoup(html, "html.parser")
+            soup = BeautifulSoup(html, "lxml")
         except Exception:
-            return
+            try:
+                soup = BeautifulSoup(html, "html.parser")
+            except Exception:
+                return
 
         # Extract <a href>
         for a in soup.find_all("a", href=True):
@@ -75,7 +146,7 @@ class Crawler:
             full_url = urljoin(parent_url, href)
             if self._should_visit(full_url):
                 self._add_endpoint(full_url)
-                self.crawl(full_url, depth + 1)
+                self.url_queue.put((full_url, depth + 1))
 
         # Extract <form action>
         for form in soup.find_all("form"):
@@ -96,16 +167,19 @@ class Crawler:
                 else:
                     form_url_with_params = form_url
                 self._add_endpoint(form_url_with_params)
-                self.crawl(form_url, depth + 1)
+                self.url_queue.put((form_url, depth + 1))
 
     def _parse_scripts_for_endpoints(self, html, parent_url, depth):
         if not html or depth > self.max_depth:
             return
 
         try:
-            soup = BeautifulSoup(html, "html.parser")
+            soup = BeautifulSoup(html, "lxml")
         except Exception:
-            return
+            try:
+                soup = BeautifulSoup(html, "html.parser")
+            except Exception:
+                return
 
         # Inline scripts
         for script in soup.find_all("script"):
@@ -115,58 +189,63 @@ class Crawler:
                 if self._should_visit(full_url):
                     self._add_endpoint(full_url)
 
-        # External bundles (limit to keep scans fast)
-        fetched = 0
+        # External bundles - fetch concurrently (limit to keep scans fast)
+        script_urls = []
         for script in soup.find_all("script", src=True):
             src = script.get("src")
-            if not src:
-                continue
-            src_url = urljoin(parent_url, src)
-            if not self._should_fetch_resource(src_url):
-                continue
-            try:
-                res = self.session.get(src_url)
-            except Exception:
-                res = None
+            if src and self._should_fetch_resource(urljoin(parent_url, src)):
+                script_urls.append(urljoin(parent_url, src))
+                if len(script_urls) >= 5:
+                    break
+        
+        if script_urls:
+            self._fetch_scripts_concurrently(script_urls, parent_url)
+
+    def _fetch_scripts_concurrently(self, script_urls, parent_url):
+        """Fetch multiple JS bundles in parallel"""
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_map = {executor.submit(self._fetch_script, url): url for url in script_urls}
+            
+            for future in as_completed(future_map, timeout=15):
+                try:
+                    script_text = future.result()
+                    if script_text:
+                        for candidate in self._extract_endpoint_candidates(script_text):
+                            full_url = urljoin(parent_url, candidate)
+                            if self._should_visit(full_url):
+                                self._add_endpoint(full_url)
+                except Exception as e:
+                    logger.debug(f"Script fetch error: {e}")
+    
+    def _fetch_script(self, url):
+        """Fetch a single script with size limits"""
+        try:
+            res = self.session.get(url)
             if not res or res.status_code >= 400:
-                continue
-
-            # Skip huge/non-text responses
-            try:
-                content_len = len(getattr(res, "content", b"") or b"")
-            except Exception:
-                content_len = 0
-            if content_len and content_len > 1024 * 1024:
-                continue
-            ct = (getattr(res, "headers", {}) or {}).get("Content-Type", "").lower()
+                return None
+            
+            # Check size
+            content_len = len(res.content or b"")
+            if content_len > 1024 * 1024:  # 1MB limit for scripts
+                return None
+            
+            # Check content type
+            ct = res.headers.get("Content-Type", "").lower()
             if ct and ("javascript" not in ct and "text" not in ct and "json" not in ct):
-                continue
-
-            for candidate in self._extract_endpoint_candidates(res.text or ""):
-                full_url = urljoin(parent_url, candidate)
-                if self._should_visit(full_url):
-                    self._add_endpoint(full_url)
-
-            fetched += 1
-            if fetched >= 5:
-                break
+                return None
+            
+            return res.text
+        except Exception:
+            return None
 
     def _extract_endpoint_candidates(self, text: str):
         if not text:
             return []
 
-        # Keep this conservative to avoid wild false positives.
-        # Targets common backend patterns used by SPAs (Juice Shop uses /rest/* heavily).
-        patterns = [
-            r"(?i)\bfetch\(\s*['\"]([^'\"]+)['\"]",
-            r"(?i)\baxios\.(?:get|post|put|delete|patch)\(\s*['\"]([^'\"]+)['\"]",
-            r"(?i)\bxmlhttprequest\b[\s\S]{0,200}open\(\s*['\"][A-Z]+['\"]\s*,\s*['\"]([^'\"]+)['\"]",
-            r"['\"](/(?:api|rest|graphql|v1|v2)/[^'\"\s<>]{1,200})['\"]",
-        ]
-
         candidates = []
-        for pat in patterns:
-            for match in re.findall(pat, text):
+        # Use compiled patterns for better performance
+        for pattern in self.ENDPOINT_PATTERNS:
+            for match in pattern.findall(text):
                 if not match:
                     continue
                 # Filter obviously irrelevant schemes
@@ -261,14 +340,16 @@ class Crawler:
 
     def _should_visit(self, url):
         norm_url = self._normalize_url(url)
-        if norm_url in self.visited:
-            return False
+        with self.visited_lock:
+            if norm_url in self.visited:
+                return False
         if self.same_host_only:
             host = urlparse(url).netloc
             if host and host != self.base_host:
                 return False
         return True
 
+    @lru_cache(maxsize=10000)
     def _normalize_url(self, url):
         # Remove fragment, sort query params
         parsed = urlparse(url)
