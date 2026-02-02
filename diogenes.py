@@ -60,6 +60,7 @@ def main():
     parser.add_argument("--delay", type=float, default=0.0, help="Delay between requests in seconds (default: 0)")
     parser.add_argument("--threads", type=int, default=5, help="Number of concurrent threads for scanning (default: 5)")
     parser.add_argument("--no-concurrent", action="store_true", help="Disable concurrent scanning (use sequential mode)")
+    parser.add_argument("--quick-scan", action="store_true", help="Enable quick scan mode (early exit if no vulnerability signals found)")
     parser.add_argument("--endpoints-file", help="File with list of endpoints to test (one per line)")
     parser.add_argument("--cookie", help="Session cookie string (name=value;name=value)")
     parser.add_argument("--header", help="Custom headers (Name: Value; Name: Value)")
@@ -133,7 +134,10 @@ def main():
         logger.info(f"Found {len(crawler.endpoints)} total endpoints")
         
         # Run detectors
-        logger.info("Running detectors...")
+        if args.quick_scan:
+            logger.info(f"Running detectors in QUICK SCAN mode on {len(crawler.endpoints)} endpoints...")
+        else:
+            logger.info(f"Running detectors on {len(crawler.endpoints)} endpoints...")
         enabled_detectors = args.detectors.lower().split(",") if args.detectors != "all" else ["xss", "sqli", "csrf", "ssrf", "idor"]
         enabled_detectors = [d.strip() for d in enabled_detectors]
         

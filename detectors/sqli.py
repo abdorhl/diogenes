@@ -9,8 +9,12 @@ class SQLiDetector:
         "' OR 1=1#", '" OR 1=1#',
         "' OR 1=1/*", '" OR 1=1/*',
         "' UNION SELECT NULL--", '" UNION SELECT NULL--'
+    ]    
+    # Priority payloads for quick scan (most reliable error triggers)
+    QUICK_PAYLOADS = [
+        "'", '"',
+        "' OR 1=1--", '" OR 1=1--'
     ]
-
     # Union-based payloads for in-band SQLi
     UNION_PAYLOADS = [
         "' UNION SELECT NULL--",
@@ -79,8 +83,9 @@ class SQLiDetector:
         r"invalid column name ['\"]?([a-z0-9_]+)['\"]?"
     ]
 
-    def __init__(self, client):
+    def __init__(self, client, quick_mode=False):
         self.client = client
+        self.quick_mode = quick_mode
 
     def test(self, path, param):
         # Baseline for boolean-based checks
@@ -88,8 +93,11 @@ class SQLiDetector:
         baseline_text = baseline.text if baseline else ""
         baseline_len = len(baseline_text)
 
+        # Use priority payloads in quick mode
+        payloads = self.QUICK_PAYLOADS if self.quick_mode else self.PAYLOADS
+
         # 1) IN-BAND SQLi - Error-based detection via generic payloads
-        for payload in self.PAYLOADS:
+        for payload in payloads:
             res = self.client.get(path, params={param: payload})
             db_info = self._detect_db_info(res.text if res else "")
             if any(err in res.text.lower() for err in self.ERROR_SIGNATURES):
@@ -104,28 +112,34 @@ class SQLiDetector:
                     "description": "Error-based SQLi: SQL errors are visible in the response, allowing direct extraction of data"
                 }
 
-        # 2) IN-BAND SQLi - Union-based detection
-        union_result = self._test_union_based(path, param)
-        if union_result:
-            return union_result
+        # 2) IN-BAND SQLi - Union-based detection (skip in quick mode if no errors found)
+        if not self.quick_mode:
+            union_result = self._test_union_based(path, param)
+            if union_result:
+                return union_result
 
-        # 3) DB-specific payloads if DB identified from baseline
-        db_hint = self._detect_db_from_text(baseline_text)
-        if db_hint in self.DB_SPECIFIC_PAYLOADS:
-            for payload in self.DB_SPECIFIC_PAYLOADS[db_hint]:
-                res = self.client.get(path, params={param: payload})
-                db_info = self._detect_db_info(res.text if res else "")
-                if any(err in (res.text or "").lower() for err in self.ERROR_SIGNATURES):
-                    return {
-                        "type": "sqli",
-                        "sqli_type": "in-band (error-based)",
-                        "endpoint": path,
-                        "param": param,
-                        "payload": payload,
-                        "evidence": f"DB-specific error triggered{db_info}",
-                        "confidence": 0.85,
-                        "description": "Error-based SQLi: Database-specific payload triggered SQL error"
-                    }
+        # 3) DB-specific payloads if DB identified from baseline (skip in quick mode)
+        if not self.quick_mode:
+            db_hint = self._detect_db_from_text(baseline_text)
+            if db_hint in self.DB_SPECIFIC_PAYLOADS:
+                for payload in self.DB_SPECIFIC_PAYLOADS[db_hint]:
+                    res = self.client.get(path, params={param: payload})
+                    db_info = self._detect_db_info(res.text if res else "")
+                    if any(err in (res.text or "").lower() for err in self.ERROR_SIGNATURES):
+                        return {
+                            "type": "sqli",
+                            "sqli_type": "in-band (error-based)",
+                            "endpoint": path,
+                            "param": param,
+                            "payload": payload,
+                            "evidence": f"DB-specific error triggered{db_info}",
+                            "confidence": 0.85,
+                            "description": "Error-based SQLi: Database-specific payload triggered SQL error"
+                        }
+
+        # Skip advanced tests in quick mode
+        if self.quick_mode:
+            return None
 
         # 4) Database contents leakage signals (table/column names)
         leak = self._detect_leak(baseline_text)

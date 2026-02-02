@@ -21,19 +21,33 @@ class XSSDetector:
         "</style><svg/onload=alert(10)>"
     ]
     
+    # Priority payloads for quick scan (most reliable)
+    QUICK_PAYLOADS = [
+        '<svg/onload=alert(1)>',
+        '"/><img src=x onerror=alert(2)>',
+        "'><script>alert(3)</script>"
+    ]
+    
     # Common parameter names in web apps
     COMMON_PARAMS = ["q", "search", "id", "input", "txtInput", "keyword", "query", "name", "msg", "comment", "text", "search_term", "url", "username"]
 
-    def __init__(self, client):
+    def __init__(self, client, quick_mode=False):
         self.client = client
+        self.quick_mode = quick_mode
 
     def test(self, path, param=None):
         # If no specific param given, try common ones
         params_to_test = [param] if param else self.COMMON_PARAMS
         
+        # Use fewer params in quick mode
+        if self.quick_mode and not param:
+            params_to_test = self.COMMON_PARAMS[:3]  # Only test first 3 params
+        
+        payloads = self.QUICK_PAYLOADS if self.quick_mode else self.PAYLOADS
+        
         for test_param in params_to_test:
             # PRIORITY: Test payload reflection first (higher confidence findings)
-            for payload in self.PAYLOADS:
+            for payload in payloads:
                 try:
                     res = self.client.get(path, params={test_param: payload})
                     if not res:

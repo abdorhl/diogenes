@@ -1,5 +1,6 @@
 import signal
 import sys
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from detectors.reflection import ReflectionDetector
 from detectors.idor import IDORDetector
@@ -8,6 +9,8 @@ from detectors.xss import XSSDetector
 from detectors.sqli import SQLiDetector
 from detectors.csrf import CSRFDetector
 from detectors.ssrf import SSRFDetector
+
+logger = logging.getLogger(__name__)
 
 
 class Engine:
@@ -21,12 +24,15 @@ class Engine:
         "/graphql",
     ]
     
-    def __init__(self, session, identity_a=None, identity_b=None, enabled_detectors=None, max_workers=5, concurrent=True):
+    def __init__(self, session, identity_a=None, identity_b=None, enabled_detectors=None, max_workers=5, concurrent=True, quick_scan=False):
         self.session = session
         self.findings = []
         self.max_workers = max_workers
         self.concurrent = concurrent
         self.interrupted = False
+        self.quick_scan = quick_scan
+        self.scanned_count = 0
+        self.total_endpoints = 0
         
         # Default to all detectors if not specified
         if enabled_detectors is None:
@@ -34,10 +40,10 @@ class Engine:
         self.enabled = [d.lower() for d in enabled_detectors]
 
         self.reflection = ReflectionDetector(session)
-        self.xss = XSSDetector(session) if "xss" in self.enabled else None
-        self.sqli = SQLiDetector(session) if "sqli" in self.enabled else None
+        self.xss = XSSDetector(session, quick_mode=quick_scan) if "xss" in self.enabled else None
+        self.sqli = SQLiDetector(session, quick_mode=quick_scan) if "sqli" in self.enabled else None
         self.csrf = CSRFDetector(session) if "csrf" in self.enabled else None
-        self.ssrf = SSRFDetector(session) if "ssrf" in self.enabled else None
+        self.ssrf = SSRFDetector(session, quick_mode=quick_scan) if "ssrf" in self.enabled else None
         self.idor = IDORDetector(identity_a, identity_b) if "idor" in self.enabled and identity_a and identity_b else None
         self.state = StateChangeDetector()
 
@@ -56,6 +62,8 @@ class Engine:
                     res = None
                 if res and res.status_code < 400:
                     endpoints.append(full_url)
+        
+        self.total_endpoints = len(endpoints)
         
         # Concurrent scanning for better performance
         if self.concurrent and len(endpoints) > 1:
@@ -96,6 +104,10 @@ class Engine:
     
     def _scan_endpoint(self, ep):
         """Run all enabled detectors on a single endpoint"""
+        self.scanned_count += 1
+        if self.scanned_count % 10 == 0 or self.scanned_count == self.total_endpoints:
+            logger.info(f"Progress: {self.scanned_count}/{self.total_endpoints} endpoints scanned, {len(self.findings)} findings")
+        
         self._run_reflection(ep)
         if self.xss:
             self._run_xss(ep)

@@ -3,6 +3,9 @@
 ## Basic scan
 python diogenes.py https://target.local
 
+## ⚡ Quick scan (Smart early-exit for large applications)
+python diogenes.py https://target.local --quick-scan --threads 10
+
 ## With cookies
 python diogenes.py https://target.local --cookie "session=abc123;token=xyz"
 

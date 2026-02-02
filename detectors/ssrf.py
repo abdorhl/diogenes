@@ -1,11 +1,16 @@
 class SSRFDetector:
     PAYLOADS = ["http://127.0.0.1", "http://localhost", "http://169.254.169.254/latest/meta-data/"]
+    
+    # Priority payloads for quick scan
+    QUICK_PAYLOADS = ["http://127.0.0.1", "http://169.254.169.254/latest/meta-data/"]
 
-    def __init__(self, client):
+    def __init__(self, client, quick_mode=False):
         self.client = client
+        self.quick_mode = quick_mode
 
     def test(self, path, param):
-        for payload in self.PAYLOADS:
+        payloads = self.QUICK_PAYLOADS if self.quick_mode else self.PAYLOADS
+        for payload in payloads:
             try:
                 res = self.client.get(path, params={param: payload})
                 if not res:
