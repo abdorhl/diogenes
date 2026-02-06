@@ -2,3 +2,23 @@ requests>=2.28.0
 beautifulsoup4>=4.11.0
 rich>=13.0.0
 lxml>=4.9.0
+
+# Security enhancements
+defusedxml>=0.7.1
+validators>=0.20.0
+
+# Performance optimization (optional)
+# requests-cache>=1.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+
+# CLI enhancements
+tqdm>=4.66.0
+colorama>=0.4.6
+
+# Type checking (development only)
+# mypy>=1.5.0
+# types-requests>=2.31.0

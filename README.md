@@ -2,7 +2,7 @@
   <img src="screenshots/logo_diogenes.png" alt="DIOGENES" width="300">
 </p>
 
-<h1 align="center">DIOGENES v1.1</h1>
+<h1 align="center">DIOGENES v1.2</h1>
 <p align="center"><i>High-Performance Web Security Scanner for Developers</i></p>
 
 ---
@@ -11,12 +11,16 @@
 
 - **XSS Detection** - Reflected, Stored, DOM-based
 - **SQL Injection** - Error patterns + DB fingerprinting
-- **CSRF** - Missing token detection
+- **CSRF** - Missing token detection (Rails, Django, Laravel conventions)
 - **SSRF** - Server-side request forgery
 - **IDOR** - Access control issues (supports JWT/API keys)
 - **Concurrent Scanning** - 3-5x faster with ThreadPoolExecutor
 - **Rate Limiting** - Configurable delays to prevent bans
 - **Smart Crawling** - SPA support with JS endpoint extraction
+- **🆕 Scan Profiles** - Stealth, balanced, aggressive, quick modes
+- **🆕 Security Hardening** - SSRF protection, input validation
+- **🆕 Configuration System** - JSON configs, environment variables
+- **🆕 Comprehensive Testing** - Unit tests for all core components
 
 
 ## 🏛️ Philosophy
@@ -47,6 +51,23 @@ pip install -r requirements.txt
 ### Basic Scan
 ```bash
 python diogenes.py https://target.com
+```
+
+### 🆕 Use Scan Profiles
+```bash
+# Stealth mode (slow, avoids detection)
+python diogenes.py https://target.com --profile stealth
+
+# Aggressive mode (fast, thorough)
+python diogenes.py https://target.com --profile aggressive
+
+# Quick mode (fastest)
+python diogenes.py https://target.com --profile quick
+```
+
+### 🆕 Use Configuration Files
+```bash
+python diogenes.py https://target.com --config examples/config_stealth.json
 ```
 
 ### Fast Scan (10 threads)
@@ -108,6 +129,8 @@ python diogenes.py https://target.com --endpoints-file endpoints.txt
 
 | Flag | Description | Example |
 |------|-------------|---------|
+| `--profile` | **Scan profile** (stealth/balanced/aggressive/quick) | `--profile stealth` |
+| `--config` | **Load config file** | `--config scan.json` |
 | `--depth N` | Crawl depth | `--depth 3` |
 | `--delay N` | Delay between requests (seconds) | `--delay 1.0` |
 | `--threads N` | Concurrent workers | `--threads 10` |
@@ -121,6 +144,30 @@ python diogenes.py https://target.com --endpoints-file endpoints.txt
 | `--output` | Format (table/json) | `--output json` |
 | `--html` | HTML report path | `--html report.html` |
 | `--verbose` | Verbose logging | `--verbose` |
+
+---
+
+## 🆕 Configuration & Environment Variables
+
+### Using Config Files
+```bash
+python diogenes.py https://target.com --config examples/config_balanced.json
+```
+
+### Environment Variables
+```bash
+export DIOGENES_THREADS=10
+export DIOGENES_DELAY=0.5
+export DIOGENES_QUICK_SCAN=true
+python diogenes.py https://target.com
+```
+
+### Available Profiles
+- **stealth** - Slow, careful, avoids detection (delay 1s, 2 threads)
+- **balanced** - Default recommended settings (delay 0.3s, 5 threads)
+- **aggressive** - Fast and thorough (no delay, 10 threads)
+- **quick** - Fastest scan with early-exit (8 threads, max 200 URLs)
+- **deep** - Comprehensive crawl (depth 5, max 2000 URLs)
 
 ---
 
@@ -182,6 +229,23 @@ DIOGENES is for:
 NOT for:
 - ❌ Unauthorized testing
 - ❌ Malicious attacks
+
+---
+
+## 🧪 Testing
+
+Run unit tests:
+```bash
+python tests/test_core.py
+# or
+pytest tests/test_core.py -v
+```
+
+---
+
+## 📚 Documentation
+
+- **examples/** - Configuration file examples
 
 
 <p align="center">
