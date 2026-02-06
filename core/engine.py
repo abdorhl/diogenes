@@ -9,6 +9,7 @@ from detectors.xss import XSSDetector
 from detectors.sqli import SQLiDetector
 from detectors.csrf import CSRFDetector
 from detectors.ssrf import SSRFDetector
+from detectors.xxe import XXEDetector
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class Engine:
         
         # Default to all detectors if not specified
         if enabled_detectors is None:
-            enabled_detectors = ["xss", "sqli", "csrf", "ssrf", "idor"]
+            enabled_detectors = ["xss", "sqli", "csrf", "ssrf", "idor", "xxe"]
         self.enabled = [d.lower() for d in enabled_detectors]
 
         self.reflection = ReflectionDetector(session)
@@ -44,6 +45,7 @@ class Engine:
         self.sqli = SQLiDetector(session, quick_mode=quick_scan) if "sqli" in self.enabled else None
         self.csrf = CSRFDetector(session) if "csrf" in self.enabled else None
         self.ssrf = SSRFDetector(session, quick_mode=quick_scan) if "ssrf" in self.enabled else None
+        self.xxe = XXEDetector(session, quick_mode=quick_scan) if "xxe" in self.enabled else None
         self.idor = IDORDetector(identity_a, identity_b) if "idor" in self.enabled and identity_a and identity_b else None
         self.state = StateChangeDetector()
 
@@ -115,6 +117,8 @@ class Engine:
             self._run_sqli(ep)
         if self.ssrf:
             self._run_ssrf(ep)
+        if self.xxe:
+            self._run_xxe(ep)
         if self.csrf:
             self._run_csrf(ep)
         self._run_state(ep)
@@ -149,6 +153,12 @@ class Engine:
         result = self.xss.test(ep, param=None)
         if result:
             self.findings.append(result)
+
+    def _run_xxe(self, ep):
+        for param in ["xml", "data", "content"]:
+            result = self.xxe.test(ep, param)
+            if result:
+                self.findings.append(result)
 
     def _run_idor(self, ep):
         result = self.idor.test(ep)

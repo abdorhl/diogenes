@@ -19,6 +19,7 @@ class Reporter:
         "csrf": {"risk": "Medium", "cweid": "352", "color": "#f57c00"},
         "ssrf": {"risk": "High", "cweid": "918", "color": "#d32f2f"},
         "idor": {"risk": "High", "cweid": "639", "color": "#d32f2f"},
+        "xxe": {"risk": "Critical", "cweid": "611", "color": "#b71c1c"},
         "reflection": {"risk": "Medium", "cweid": "200", "color": "#f57c00"},
         "state_change": {"risk": "Medium", "cweid": "352", "color": "#f57c00"}
     }
@@ -53,6 +54,12 @@ class Reporter:
             "Use indirect references instead of sequential IDs",
             "Validate user ownership of requested resources",
             "Implement access control matrices"
+        ],
+        "xxe": [
+            "Disable XML external entity processing in parser",
+            "Use defusedxml library instead of xml/lxml",
+            "Validate and sanitize all XML input",
+            "Use JSON instead of XML where possible"
         ],
         "reflection": [
             "Properly encode and escape all user-controlled output",

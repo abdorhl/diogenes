@@ -13,6 +13,7 @@
 - **SQL Injection** - Error patterns + DB fingerprinting
 - **CSRF** - Missing token detection (Rails, Django, Laravel conventions)
 - **SSRF** - Server-side request forgery
+- **XXE** - XML External Entity injection (Classic, SOAP, SVG, XInclude)
 - **IDOR** - Access control issues (supports JWT/API keys)
 - **Concurrent Scanning** - 3-5x faster with ThreadPoolExecutor
 - **Rate Limiting** - Configurable delays to prevent bans
