@@ -10,6 +10,12 @@ from detectors.sqli import SQLiDetector
 from detectors.csrf import CSRFDetector
 from detectors.ssrf import SSRFDetector
 from detectors.xxe import XXEDetector
+# New detectors
+from detectors.path_traversal import PathTraversalDetector
+from detectors.command_injection import CommandInjectionDetector
+from detectors.ssti import SSTIDetector
+from detectors.nosql_injection import NoSQLInjectionDetector
+from detectors.cors import CORSDetector
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +43,13 @@ class Engine:
         
         # Default to all detectors if not specified
         if enabled_detectors is None:
-            enabled_detectors = ["xss", "sqli", "csrf", "ssrf", "idor", "xxe"]
+            enabled_detectors = [
+                "xss", "sqli", "csrf", "ssrf", "idor", "xxe",
+                "path_traversal", "command_injection", "ssti", "nosql", "cors"
+            ]
         self.enabled = [d.lower() for d in enabled_detectors]
 
+        # Initialize all detectors
         self.reflection = ReflectionDetector(session)
         self.xss = XSSDetector(session, quick_mode=quick_scan) if "xss" in self.enabled else None
         self.sqli = SQLiDetector(session, quick_mode=quick_scan) if "sqli" in self.enabled else None
@@ -48,6 +58,13 @@ class Engine:
         self.xxe = XXEDetector(session, quick_mode=quick_scan) if "xxe" in self.enabled else None
         self.idor = IDORDetector(identity_a, identity_b) if "idor" in self.enabled and identity_a and identity_b else None
         self.state = StateChangeDetector()
+        
+        # New detectors
+        self.path_traversal = PathTraversalDetector(session, quick_mode=quick_scan) if "path_traversal" in self.enabled else None
+        self.command_injection = CommandInjectionDetector(session, quick_mode=quick_scan) if "command_injection" in self.enabled else None
+        self.ssti = SSTIDetector(session, quick_mode=quick_scan) if "ssti" in self.enabled else None
+        self.nosql = NoSQLInjectionDetector(session, quick_mode=quick_scan) if "nosql" in self.enabled else None
+        self.cors = CORSDetector(session) if "cors" in self.enabled else None
 
 
     def run(self, endpoints):
@@ -124,6 +141,17 @@ class Engine:
         self._run_state(ep)
         if self.idor:
             self._run_idor(ep)
+        # New detectors
+        if self.path_traversal:
+            self._run_path_traversal(ep)
+        if self.command_injection:
+            self._run_command_injection(ep)
+        if self.ssti:
+            self._run_ssti(ep)
+        if self.nosql:
+            self._run_nosql(ep)
+        if self.cors:
+            self._run_cors(ep)
     def _run_sqli(self, ep):
         for param in ["q", "search", "id"]:
             result = self.sqli.test(ep, param)
@@ -167,5 +195,34 @@ class Engine:
 
     def _run_state(self, ep):
         result = self.state.analyze(ep)
+        if result:
+            self.findings.append(result)
+
+    def _run_path_traversal(self, ep):
+        for param in ["file", "path", "page", "doc", "url"]:
+            result = self.path_traversal.test(ep, param)
+            if result:
+                self.findings.append(result)
+
+    def _run_command_injection(self, ep):
+        for param in ["cmd", "command", "exec", "ping", "host"]:
+            result = self.command_injection.test(ep, param)
+            if result:
+                self.findings.append(result)
+
+    def _run_ssti(self, ep):
+        for param in ["template", "view", "content", "text", "name"]:
+            result = self.ssti.test(ep, param)
+            if result:
+                self.findings.append(result)
+
+    def _run_nosql(self, ep):
+        for param in ["username", "user", "email", "login", "id"]:
+            result = self.nosql.test(ep, param)
+            if result:
+                self.findings.append(result)
+
+    def _run_cors(self, ep):
+        result = self.cors.test(ep)
         if result:
             self.findings.append(result)

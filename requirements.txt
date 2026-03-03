@@ -15,6 +15,9 @@ pytest>=7.4.0
 pytest-cov>=4.1.0
 pytest-mock>=3.11.1
 
+# PDF report generation
+xhtml2pdf>=0.2.11
+
 # CLI enhancements
 tqdm>=4.66.0
 colorama>=0.4.6

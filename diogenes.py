@@ -16,6 +16,11 @@ from reporting.reporter import Reporter
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
+# Suppress urllib3 connection pool warnings
+logging.getLogger('urllib3').setLevel(logging.ERROR)
+logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
+warnings.filterwarnings('ignore', message='Connection pool is full')
+
 def parse_cookies(cookie_str: str) -> dict:
     cookies = {}
     if not cookie_str:
@@ -38,7 +43,7 @@ def parse_headers(header_str: str) -> dict:
             headers[name.strip()] = value.strip()
     return headers
 
-def build_report_path(url: str) -> str:
+def build_report_path(url: str, ext: str = "html") -> str:
     parsed = urlparse(url)
     host = parsed.netloc or parsed.path
     host = host.split(":")[0]
@@ -46,7 +51,7 @@ def build_report_path(url: str) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     reports_dir = Path("reports")
     reports_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{safe_host}_{timestamp}.html"
+    filename = f"{safe_host}_{timestamp}.{ext}"
     return str(reports_dir / filename)
 
 def main():
@@ -68,6 +73,8 @@ def main():
     parser.add_argument("--identity-b", help="Path to file with identity B cookies")
     parser.add_argument("--output", choices=["table", "json"], default="table", help="Output format (default: table)")
     parser.add_argument("--html", help="Optional custom HTML report path (default: reports/<site>_<timestamp>.html)")
+    parser.add_argument("--pdf", help="Optional custom PDF report path (default: reports/<site>_<timestamp>.pdf)")
+    parser.add_argument("--no-pdf", action="store_true", help="Disable automatic PDF report generation")
     parser.add_argument("--detectors", default="all", help="Detectors to run (xss,sqli,csrf,ssrf,idor,all). Default: all")
     parser.add_argument("--test-findings", action="store_true", help="Add test finding for validation")
     parser.add_argument("--verbose", action="store_true", help="Verbose logging")
@@ -176,9 +183,18 @@ def main():
             reporter.render(engine.findings)
 
         # Always generate HTML report
-        report_path = args.html or build_report_path(args.url)
+        report_path = args.html or build_report_path(args.url, "html")
         report_file = reporter.render_html(engine.findings, report_path)
         logger.info(f"HTML report generated: {report_file}")
+
+        # Generate PDF report alongside HTML
+        if not args.no_pdf:
+            try:
+                pdf_path = args.pdf or build_report_path(args.url, "pdf")
+                pdf_file = reporter.render_pdf(engine.findings, pdf_path, target_url=args.url)
+                logger.info(f"PDF report generated: {pdf_file}")
+            except RuntimeError as e:
+                logger.warning(f"PDF generation skipped: {e}")
     
     except KeyboardInterrupt:
         print()  # New line after ^C

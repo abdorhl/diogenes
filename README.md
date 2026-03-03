@@ -2,27 +2,10 @@
   <img src="screenshots/logo_diogenes.png" alt="DIOGENES" width="300">
 </p>
 
-<h1 align="center">DIOGENES v1.2</h1>
+<h1 align="center">DIOGENES v1.3</h1>
 <p align="center"><i>High-Performance Web Security Scanner for Developers</i></p>
 
 ---
-
-## 🚀 Features
-
-- **XSS Detection** - Reflected, Stored, DOM-based
-- **SQL Injection** - Error patterns + DB fingerprinting
-- **CSRF** - Missing token detection (Rails, Django, Laravel conventions)
-- **SSRF** - Server-side request forgery
-- **XXE** - XML External Entity injection (Classic, SOAP, SVG, XInclude)
-- **IDOR** - Access control issues (supports JWT/API keys)
-- **Concurrent Scanning** - 3-5x faster with ThreadPoolExecutor
-- **Rate Limiting** - Configurable delays to prevent bans
-- **Smart Crawling** - SPA support with JS endpoint extraction
-- **🆕 Scan Profiles** - Stealth, balanced, aggressive, quick modes
-- **🆕 Security Hardening** - SSRF protection, input validation
-- **🆕 Configuration System** - JSON configs, environment variables
-- **🆕 Comprehensive Testing** - Unit tests for all core components
-
 
 ## 🏛️ Philosophy
 
@@ -37,7 +20,29 @@ It **reasons**.
 
 ---
 
-## 📦 Installation
+## Features
+
+**Vulnerability Detection**
+- **XSS** - 100+ payloads (reflected/stored/DOM), context-aware, WAF evasion, framework-specific (React/Angular/jQuery)
+- **SQLi** - Error-based, union-based, blind, DB fingerprinting (MySQL/PostgreSQL/MSSQL/Oracle)
+- **Command Injection** - Output-based + time-based blind detection
+- **Path Traversal** - Linux/Windows, null byte injection, encoding bypass
+- **SSTI** - 8 template engines (Jinja2/ERB/Twig/Smarty/FreeMarker/Velocity/Thymeleaf/Pug)
+- **NoSQL Injection** - MongoDB operators, JavaScript injection, auth bypass
+- **CORS** - Misconfiguration detection (5 test types)
+- **CSRF** - Token validation, strength testing
+- **SSRF** - AWS/GCP/Azure metadata, protocol smuggling, localhost bypass
+- **XXE** - Classic/SOAP/SVG/XInclude
+- **IDOR** - JWT/API key-based access control testing
+
+**Scanning Modes**
+- Interactive console (Metasploit-style)
+- CLI with multiple profiles (stealth/balanced/aggressive/quick)
+- Concurrent scanning (ThreadPoolExecutor)
+- Smart crawling (SPA support, JS endpoint extraction)
+- Rate limiting + request delay controls
+
+## Installation
 
 ```bash
 git clone https://github.com/abdorhl/diogenes.git
@@ -45,49 +50,58 @@ cd diogenes
 pip install -r requirements.txt
 ```
 
----
+## Usage
 
-## 🎯 Quick Start
+### Interactive Console (Recommended)
+```bash
+python console.py
 
-### Basic Scan
+# Available modules:
+# full              - Full scan (all detectors)
+# xss               - XSS only
+# sqli              - SQL injection only
+# cmd_injection     - Command injection only
+# path_traversal    - Path traversal only
+# ssti              - SSTI only
+# nosql             - NoSQL injection only
+# cors              - CORS only
+# csrf              - CSRF only
+# ssrf              - SSRF only
+# xxe               - XXE only
+# idor              - IDOR only
+# quick             - Quick scan (priority payloads)
+# stealth           - Stealth mode
+# aggressive        - Aggressive mode
+
+diogenes > use full
+diogenes (full) > set TARGET https://target.com
+diogenes (full) > set COOKIE session=abc123
+diogenes (full) > run
+```
+
+### CLI Mode
+
+**Basic scan**
 ```bash
 python diogenes.py https://target.com
 ```
 
-### 🆕 Use Scan Profiles
+**Quick scan (60-80% faster, priority payloads only)**
 ```bash
-# Stealth mode (slow, avoids detection)
-python diogenes.py https://target.com --profile stealth
-
-# Aggressive mode (fast, thorough)
-python diogenes.py https://target.com --profile aggressive
-
-# Quick mode (fastest)
-python diogenes.py https://target.com --profile quick
+python diogenes.py https://target.com --quick-scan --threads 10
 ```
 
-### 🆕 Use Configuration Files
+**With authentication**
+```bash
+python diogenes.py https://target.com --cookie "session=abc123" --header "Authorization: Bearer token"
+```
+
+**Configuration file**
 ```bash
 python diogenes.py https://target.com --config examples/config_stealth.json
 ```
 
-### Fast Scan (10 threads)
-```bash
-python diogenes.py https://target.com --threads 10
-```
-
-### ⚡ Quick Scan (Smart Early-Exit - Recommended for Large Apps)
-```bash
-python diogenes.py https://target.com --quick-scan --threads 10
-```
-> **Perfect for Laravel apps with 100+ endpoints!** Skips remaining payloads if no vulnerability signals detected early, reducing scan time by 60-80%.
-
-### Production Scan (rate limited)
-```bash
-python diogenes.py https://target.com --delay 1.0 --html report.html
-```
-
-### IDOR with JWT
+**IDOR testing (requires 2 identities)**
 ```bash
 python diogenes.py https://api.target.com \
   --identity-a user1.json \
@@ -95,30 +109,9 @@ python diogenes.py https://api.target.com \
   --detectors idor
 ```
 
-### Targeted Testing
+**Scan from endpoint list**
 ```bash
-python diogenes.py https://target.com --endpoints-file endpoints.txt
-```
-
----
-
-## 📸 Screenshots
-
-<p align="center">
-  <img src="screenshots/screen1.png" width="800">
-  <br><i>CLI Output with Findings</i>
-</p>
-<p align="center">
-  <img src="screenshots/screen2.png" width="800">
-  <br><i>CLI Output with Findings</i>
-</p>
-<p align="center">
-  <img src="screenshots/screen3.png" width="800">
-  <br><i>HTML Report Dashboard</i>
-</p>
-
-<p align="center">
-  <img src="screenshots/screen4.png" width="800">
+##g src="screenshots/screen4.png" width="800">
   <br><i>Finding Details</i>
 </p>
 
@@ -172,33 +165,7 @@ python diogenes.py https://target.com
 
 ---
 
-## 📝 Identity File Format (JWT Support)
-
-```json
-{
-  "cookies": {
-    "session": "abc123"
-  },
-  "headers": {
-    "Authorization": "Bearer eyJhbGci...",
-    "X-API-Key": "your_key"
-  }
-}
-```
-
----
-
-## 📊 Performance
-
-**Quick Scan Mode Performance (--quick-scan):**
-
-| Target Size | Standard Mode | Quick Scan Mode | Time Saved |
-|-------------|--------------|-----------------|------------|
-| 10 endpoints | 15s | 6s | **60%** |
-| 50 endpoints | 55s | 22s | **60%** |
-| 100 endpoints | 2m 5s | 45s | **64%** |
-| 500 endpoints (Laravel) | 11m 30s | 4m | **65%** |
-
+## Identity File Format (JWT/API Key
 **How Quick Scan Works:**
 - Tests only 3 priority payloads for XSS (vs 10 full payloads)
 - Tests only 4 priority payloads for SQLi (vs 13+ payloads + advanced tests)
@@ -212,45 +179,61 @@ python diogenes.py https://target.com
 # For large applications (100+ endpoints)
 python diogenes.py https://laravel-app.com --quick-scan --threads 10
 
-# For thorough audits (fewer endpoints)
-python diogenes.py https://target.com --threads 5
-```
+## Scan Profiles
 
+| Profile | Use Case | Threads | Delay | Max URLs |
+|---------|----------|---------|-------|----------|
+| `stealth` | Production, avoid detection | 2 | 1.0s | 1000 |
+| `balanced` | Default (recommended) | 5 | 0.3s | 1000 |
+| `aggressive` | Internal testing | 10 | 0s | 1000 |
+| `quick` | Fast scan, priority payloads | 8 | 0s | 200 |
+| `deep` | Comprehensive crawl | 5 | 0.3s | 2000 |
 
-## ⚖️ Legal
+## Performance
 
-**Only test systems you own or have explicit permission to test.**
+Quick scan mode: **60-80% faster** (uses priority payloads only)
 
-DIOGENES is for:
-- ✅ Internal security audits
-- ✅ Pre-deployment testing
-- ✅ Bug bounty programs (with authorization)
-- ✅ Security training
+| Endpoints | Standard | Quick Mode | Time Saved |
+|-----------|----------|------------|------------|
+| 10 | 15s | 6s | 60% |
+| 50 | 55s | 22s | 60% |
+| 100 | 2m 5s | 45s | 64% |
+| 500+ | 11m 30s | 4m | 65% |
 
-NOT for:
-- ❌ Unauthorized testing
-- ❌ Malicious attacks
+## What's New in v1.3
 
----
+**Enhanced XSS Detection**
+- 100+ payloads (10x increase from v1.2)
+- Context-aware detection (script/attribute/HTML/JSON/URL)
+- WAF bypass techniques (encoding, null bytes, double encoding, etc.)
+- DOM XSS detection with sink/source analysis
+- Stored XSS detection (persistence checking)
+- Framework-specific patterns (React, Angular, jQuery)
 
-## 🧪 Testing
+**New Detectors**
+- Command Injection (output-based + time-based blind)
+- Path Traversal (Linux/Windows with encoding bypass)
+- SSTI (8 template engines)
+- NoSQL Injection (MongoDB/CouchDB)
+- CORS misconfiguration (5 test types)
 
-Run unit tests:
-```bash
-python tests/test_core.py
-# or
-pytest tests/test_core.py -v
-```
+**Enhanced Detectors**
+- SSRF: Cloud metadata (AWS/GCP/Azure), protocol smuggling
+- CSRF: Token validation + strength testing
+- All detectors: Professional error handling + logging
 
----
+**Code Quality**
+- Comprehensive docstrings for all methods
+- Professional error handling throughout
+- Multi-level logging (INFO/WARNING/DEBUG)
 
-## 📚 Documentation
+## Legal
 
-- **examples/** - Configuration file examples
+**Only test systems you own or have written authorization to test.**
 
+For: Internal audits, pre-deployment testing, authorized bug bounties, security training.
+Not for: Unauthorized testing or malicious purposes.
 
-<p align="center">
-  <b>Built for developers who want to ship secure code fast 🛡️⚡</b>
-</p>
+## License
 
-
+Use responsibly.
